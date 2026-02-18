@@ -1,136 +1,224 @@
 package cantonvalidator
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"os/exec"
+	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/ayushn2/canton_validator/config"
 )
 
-const (
-	ValidatorBaseURL = "http://localhost:5003"
-	AuthSecret       = "unsafe"
-	AuthAudience     = "https://validator.example.com"
-	WalletUser       = "administrator"
-)
 
-type CantonClient struct {
-	httpClient *http.Client
-	token      string
+type CantonGRPCClient struct{}
+
+var cfg = config.Load()
+
+
+func NewCantonGRPCClient() (*CantonGRPCClient, error) {
+	return &CantonGRPCClient{}, nil
 }
 
-func NewCantonClient() (*CantonClient, error) {
-	token, err := generateToken(WalletUser)
+func (c *CantonGRPCClient) Close() {}
+
+func (c *CantonGRPCClient) CreateParty(
+	ctx context.Context,
+	hint string,
+) (string, error) {
+
+	payload := map[string]interface{}{
+		"party_id_hint": hint,
+	}
+
+	jsonBytes, _ := json.Marshal(payload)
+
+	cmd := exec.Command(
+		"grpcurl",
+		"-plaintext",
+		"-d", string(jsonBytes),
+		cfg.GRPCHost,
+		"com.daml.ledger.api.v2.admin.PartyManagementService/AllocateParty",
+	)
+
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %v", err)
+		output := string(out)
+
+	if strings.Contains(output, "Party already exists") {
+
+    fmt.Println("Party already exists. Constructing full party ID directly...")
+
+    // Extract namespace from validator party
+    // Format: scopex-validator-1::<namespace>
+    parts := strings.Split("scopex-validator-1::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c", "::")
+    namespace := parts[1]
+
+    fullParty := hint + "::" + namespace
+
+    fmt.Println("Resolved full party ID:", fullParty)
+    return fullParty, nil
+}
+
+		return "", fmt.Errorf("party creation failed: %s", output)
 	}
 
-	return &CantonClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		token:      token,
-	}, nil
-}
-
-func (c *CantonClient) Close() error {
-	return nil
-}
-
-func generateToken(username string) (string, error) {
-	claims := jwt.MapClaims{
-		"sub": username,
-		"aud": AuthAudience,
-		"iat": time.Now().Unix(),
+	var resp struct {
+		PartyDetails struct {
+			Party string `json:"party"`
+		} `json:"party_details"`
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(AuthSecret))
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", fmt.Errorf("failed to parse party response: %w", err)
+	}
+
+	fmt.Println("New party allocated:", resp.PartyDetails.Party)
+
+	return resp.PartyDetails.Party, nil
 }
 
-func (c *CantonClient) doRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	var buf bytes.Buffer
-	if body != nil {
-		if err := json.NewEncoder(&buf).Encode(body); err != nil {
-			return nil, err
+func (c *CantonGRPCClient) CreateUser(
+	ctx context.Context,
+	userID string,
+) error {
+
+	payload := map[string]interface{}{
+		"user": map[string]interface{}{
+			"id": userID,
+		},
+	}
+
+	jsonBytes, _ := json.Marshal(payload)
+
+	cmd := exec.Command(
+		"grpcurl",
+		"-plaintext",
+		"-d", string(jsonBytes),
+		cfg.GRPCHost,
+		"com.daml.ledger.api.v2.admin.UserManagementService/CreateUser",
+	)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+
+		// If user already exists, ignore
+		if strings.Contains(string(out), "USER_ALREADY_EXISTS") ||
+			strings.Contains(string(out), "already exists") {
+			return nil
 		}
+
+		return fmt.Errorf("create user failed: %s", string(out))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, ValidatorBaseURL+path, &buf)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
-
-	return c.httpClient.Do(req)
-}
-
-func (c *CantonClient) ListTransactions(ctx context.Context, pageSize int) error {
-	body := map[string]int{
-		"page_size": pageSize,
-	}
-
-	resp, err := c.doRequest(ctx, http.MethodPost, "/api/validator/v0/wallet/transactions", body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-    return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-	defer resp.Body.Close()
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	fmt.Printf("Transactions: %+v\n", result)
 	return nil
 }
 
-func (c *CantonClient) GetBalance(ctx context.Context) error {
-	resp, err := c.doRequest(ctx, http.MethodGet, "/api/validator/v0/wallet/balance", nil)
+func (c *CantonGRPCClient) GrantActAs(
+	ctx context.Context,
+	userID string,
+	parties []string,
+) error {
+
+	rights := []map[string]interface{}{}
+
+	for _, p := range parties {
+		rights = append(rights, map[string]interface{}{
+			"can_act_as": map[string]interface{}{
+				"party": p,
+			},
+		})
+	}
+
+	payload := map[string]interface{}{
+		"user_id": userID,
+		"rights":  rights,
+	}
+
+	jsonBytes, _ := json.Marshal(payload)
+
+	cmd := exec.Command(
+		"grpcurl",
+		"-plaintext",
+		"-d", string(jsonBytes),
+		cfg.GRPCHost,
+		"com.daml.ledger.api.v2.admin.UserManagementService/GrantUserRights",
+	)
+
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-    return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-	defer resp.Body.Close()
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
+		return fmt.Errorf("grant rights failed: %s", string(out))
 	}
 
-	fmt.Printf("Balance: %+v\n", result)
 	return nil
 }
 
-func (c *CantonClient) Transfer(ctx context.Context, receiver string, amount string) error {
-	body := map[string]interface{}{
-		"receiver": receiver,
-		"amount":   amount,
-	}
+func CreateWalletFullFlow() error {
 
-	resp, err := c.doRequest(ctx, http.MethodPost, "/api/validator/v0/wallet/transfer", body)
+	ctx := context.Background()
+
+	grpcClient, err := NewCantonGRPCClient()
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK {
-    return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-}
-	defer resp.Body.Close()
+	defer grpcClient.Close()
 
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	// 1. Create Party
+	party, err := grpcClient.CreateParty(ctx, "walletX")
+	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Transfer response: %+v\n", result)
+	fmt.Println("Created party:", party)
+
+	// 2. Install Wallet
+	err = grpcClient.InstallWallet(
+		ctx,
+		"scopex-validator-1::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c",
+		"DSO::1220f22a8b8f2d813c25b9a684dc4dd52b532a0174d8e73a13cdf2baabfff7518337",
+		party,
+		"walletX",
+		"fd57252dda29e3ce90028114c91b521cb661df5a9d6e87c41a9e91518215fa5b",
+	)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Wallet installed")
+
 	return nil
 }
+
+func (c *CantonGRPCClient) WaitUntilPartyVisible(
+	ctx context.Context,
+	party string,
+) error {
+
+	for i := 0; i < 10; i++ {
+
+		payload := map[string]interface{}{
+			"parties": []string{party},
+		}
+
+		jsonBytes, _ := json.Marshal(payload)
+
+		cmd := exec.Command(
+			"grpcurl",
+			"-plaintext",
+			"-d", string(jsonBytes),
+			cfg.GRPCHost,
+			"com.daml.ledger.api.v2.admin.PartyManagementService/GetParties",
+		)
+
+		out, err := cmd.CombinedOutput()
+		if err == nil && strings.Contains(string(out), party) {
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("party not visible after waiting")
+}
+

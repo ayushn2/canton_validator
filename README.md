@@ -50,7 +50,7 @@ Key commands used:
 Start validator:
 
 ```bash
-./start.sh -s "https://sv.sv-1.dev.global.canton.network.sync.global" -o "" -p "scopex-dev-1" -m "1" -w
+./start.sh -s "https://sv.sv-1.test.global.canton.network.sync.global" -o "<TESTNET_SECRET>" -p "scopex-validator-1" -m "1" -w
 ```
 
 We verified container:
