@@ -37,6 +37,100 @@ This ensures:
 
 ---
 
+### Ledger API vs Wallet API (Important Distinction)
+
+There are **two different APIs** exposed by the validator setup:
+
+#### 1️⃣ Ledger API (gRPC – Port 5001)
+
+- Accessed using `grpcurl`
+- Used for:
+  - Party creation
+  - User creation
+  - Granting act_as rights
+  - Submitting commands (e.g., WalletAppInstall)
+  - Querying active contracts
+  - Reading ledger updates
+- Service namespace:
+  `com.daml.ledger.api.v2.*`
+
+This is the **low-level Canton Ledger API**.
+
+---
+
+#### 2️⃣ Wallet API (REST – Port 5003)
+
+- Accessed using HTTP requests
+- Base path:
+  `http://localhost:5003/api/validator/v0/`
+- Used for:
+  - Listing wallet transactions
+  - Getting wallet balance
+
+This is a **higher-level application API** built on top of the ledger.
+
+---
+
+Important:
+
+- Port **5001 → Ledger (gRPC)**
+- Port **5003 → Wallet (REST)**
+
+They serve different purposes and require separate SSH port forwarding if accessed remotely.
+
+---
+
+## 5. SSH Port Forwarding (Security Layer)
+
+We DO NOT expose port 5003 publicly.
+
+Instead, we use:
+
+```bash
+ssh -i ~/Downloads/scopex_canton.pem \
+    -L 5003:localhost:5003 \
+    ubuntu@ec2-<public-ip>.compute.amazonaws.com
+```
+
+This creates:
+
+Local machine → localhost:5003  
+Tunnel → EC2 container:5003  
+
+Meaning:
+
+- Only your machine can access wallet API
+- No public attack surface
+- Production-safe approach
+
+### Generic Multi-Port SSH Tunnel Example
+
+If you need access to multiple internal services (Ledger gRPC, Wallet API, Wallet UI, ANS UI), you can forward multiple ports in one command:
+
+```bash
+ssh -i ~/path/to/key.pem \
+    -L 5001:localhost:5001 \
+    -L 5003:localhost:5003 \
+    -L 8080:wallet.localhost:80 \
+    -L 8081:ans.localhost:80 \
+    ubuntu@<EC2_PUBLIC_IP>
+```
+
+What this does:
+
+- `-L 5001:localhost:5001` → Forwards Ledger gRPC API
+- `-L 5003:localhost:5003` → Forwards Wallet REST API
+- `-L 8080:wallet.localhost:80` → Forwards Wallet Web UI
+- `-L 8081:ans.localhost:80` → Forwards ANS Web UI
+
+Flow:
+
+Local Machine → SSH Tunnel → EC2 → Docker Container → Internal Service
+
+This keeps all internal services private while allowing secure local access for development.
+
+---
+
 ## 2. Docker Validator Setup
 
 Validator runs inside:
@@ -130,31 +224,6 @@ Response includes:
 - effective_locked_qty
 - round
 - total_holding_fees
-
----
-
-## 5. SSH Port Forwarding (Security Layer)
-
-We DO NOT expose port 5003 publicly.
-
-Instead, we use:
-
-```bash
-ssh -i ~/Downloads/scopex_canton.pem \
-    -L 5003:localhost:5003 \
-    ubuntu@ec2-<public-ip>.compute.amazonaws.com
-```
-
-This creates:
-
-Local machine → localhost:5003  
-Tunnel → EC2 container:5003  
-
-Meaning:
-
-- Only your machine can access wallet API
-- No public attack surface
-- Production-safe approach
 
 ---
 
