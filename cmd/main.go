@@ -25,7 +25,7 @@ func main() {
 
 	err = client.CreateWallet(
 		ctx,
-		"walletZ",
+		"walletX",
 		cfg.ValidatorParty,
 		cfg.DsoParty,
 		cfg.PackageID,
@@ -34,12 +34,12 @@ func main() {
 		log.Fatalf("wallet creation failed: %v", err)
 	}
 
-	fmt.Println("Wallet Z created successfully")
+	fmt.Println("Wallet X created successfully")
 	fmt.Println("All wallets created successfully.")
 
 	contracts, err := client.GetActiveContracts(
 	ctx,
-	"walletZ::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c",
+	"walletX::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c",
 	45760, // or fetch ledger end dynamically
 	)
 	if err != nil {
