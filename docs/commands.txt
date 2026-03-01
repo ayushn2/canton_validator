@@ -1,5 +1,9 @@
 grpcurl -plaintext localhost:5001 describe com.daml.ledger.api.v2.Command  
 
+grpcurl -plaintext \
+  localhost:5001 \
+  list
+
 grpcurl -plaintext -d '{}' localhost:5001 com.daml.ledger.api.v2.admin.UserManagementService/ListUsers
 
   grpcurl -plaintext \                                                     

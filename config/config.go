@@ -11,6 +11,9 @@ type Config struct {
 	DsoParty       string
 	PackageID      string
 	GRPCHost       string
+	JWTSecret	  string
+	JWTAudience    string
+	ValidatorURL   string
 }
 
 func Load() *Config {
@@ -24,9 +27,12 @@ func Load() *Config {
 		DsoParty:       os.Getenv("DSO_PARTY"),
 		PackageID:      os.Getenv("PACKAGE_ID"),
 		GRPCHost:       os.Getenv("GRPC_HOST"),
+		JWTSecret:      os.Getenv("JWT_SECRET"),
+		JWTAudience:    os.Getenv("JWT_AUDIENCE"),
+		ValidatorURL:   os.Getenv("VALIDATOR_URL"),
 	}
 
-	if cfg.ValidatorParty == "" || cfg.DsoParty == "" || cfg.PackageID == "" {
+	if cfg.ValidatorParty == "" || cfg.DsoParty == "" || cfg.PackageID == "" || cfg.JWTSecret == "" || cfg.JWTAudience == "" || cfg.ValidatorURL == "" {
 		log.Fatal("Missing required environment variables")
 	}
 
