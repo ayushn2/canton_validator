@@ -179,7 +179,7 @@ make wallet
 #   Total                    → ~13,500 bytes
 ```
 
-### Cost If Extra Traffic Is Used (60 CC/MB)
+### Cost If Extra Traffic Needs To Be Topped Up (60 CC/MB)
 
 | Transaction | Bytes | MB | Cost in CC |
 | --- | --- | --- | --- |
@@ -187,7 +187,13 @@ make wallet
 | CC Transfer | 8,070 | 0.00807 MB | **0.4842 CC** |
 | Single step | 2,970 | 0.00297 MB | **0.1782 CC** |
 
-> ⚠️ These costs only apply if your base traffic is exhausted. Under normal usage base traffic covers everything for free.
+> ⚠️ CC is only spent when you **purchase** extra traffic — not when you use it. The cost above reflects what you pay per transaction worth of extra traffic when topping up.
+>
+> The full consumption order before any CC is spent:
+>
+> 1. Base traffic used first (200KB FREE — resets every 20 min)
+> 2. Extra traffic used next (1,200,000 bytes already available — no CC needed yet)
+> 3. Extra traffic exhausted → **only now do you spend CC to top up** (minimum 12 CC = 200,000 bytes)
 
 ---
 
