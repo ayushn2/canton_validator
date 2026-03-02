@@ -26,3 +26,82 @@ try:
 except urllib.error.HTTPError as e:
     print(e.code, e.read().decode())
 "
+
+<-------------------------------------------------------FEE----------------------------------------------------------------->
+
+Your Balance:         64,135.84 CC
+
+Holding Fee Rate:     ~0.0000190259% per round
+
+Per round cost:       64,135.84 × 0.000000190259
+                    = ~0.0122 CC per round
+
+Per day:              ~0.0122 × 144 rounds
+                    = ~1.75 CC/day
+
+Per month:            ~52.5 CC/month
+
+A round is 10 minutes
+
+Above is the fee for holding funds in our wallet
+
+<--------------------------------------------------------------------TRAFFIC------------------------------------->
+
+ACTION                              TRAFFIC FEE?
+────────────────────────────────────────────────
+Create a wallet                     ✅ YES (small)
+Wallet receives CC                  ❌ NO
+Wallet holds CC                     ❌ NO
+Wallet creates a contract           ✅ YES
+Wallet exercises a contract choice  ✅ YES
+Wallet transfers CC                 ✅ YES
+
+Wallet creation transaction size:  very small (few KB)
+Traffic fee:                       fraction of CC
+
+Against your earnings of:          33 CC per round
+
+Cost is negligible but it
+IS a real traffic fee
+
+# Traffic fee
+
+extraTrafficLimit     = 1,200,000 bytes  (1.2 MB purchased)
+extraTrafficConsumed  = 0 bytes          (nothing used yet)
+baseTrafficRemainder  = 200,000 bytes    (200KB free base allowance)
+lastConsumedCost      = 0               (last transaction cost = 0)
+availableTraffic      = 1,400,000 bytes  (1.4 MB total available)
+
+# This means:
+
+Traffic Fees Paid So Far:   ZERO
+Traffic Consumed So Far:    ZERO bytes
+
+You have 1.4 MB of traffic ready to use
+and have not spent a single byte of it
+
+# Two traffic bucket
+
+┌─────────────────────────────────────────────────────┐
+│ BASE TRAFFIC (free, auto-replenishes)                                         │
+│   200,000 bytes remaining                                                           │
+│   This refills automatically every round                                        │
+│   No CC cost — protocol gives it for free                                       │ 
+├─────────────────────────────────────────────────────┤
+│ EXTRA TRAFFIC (purchased with CC)                                           │
+│   1,200,000 bytes purchased                                                         │
+│   0 bytes consumed                                                                         │
+│   This is what costs CC when you buy more                                  │
+└─────────────────────────────────────────────────────┘
+
+# Key insight
+
+Your node gets 200,000 bytes (200KB) 
+of FREE traffic every round
+
+A typical transaction is 5-50KB
+
+Meaning:
+  Simple transactions    → covered by free base traffic
+  High volume activity   → starts consuming extra traffic
+  Your current usage     → zero, well within free tier

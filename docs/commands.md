@@ -30,3 +30,16 @@ except urllib.error.HTTPError as e:
     print('Error:', e.code, e.read().decode())
 "
 ```
+
+## Enter canton console
+
+```bash
+docker exec -it splice-validator-participant-1 \
+  /app/bin/canton --config /tmp/remote.conf
+```
+
+## Find Traffic rate
+
+```bash
+participant.traffic_control.traffic_state(participant.synchronizers.list_connected().head.synchronizerId)
+```
