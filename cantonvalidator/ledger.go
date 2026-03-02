@@ -8,8 +8,6 @@ import (
 
 	"os/exec"
 	"strings"
-
-
 	"github.com/ayushn2/canton_validator/config"
 
 )
@@ -53,79 +51,6 @@ func (c *CantonGRPCClient) GetActiveContracts(
 
 	return string(out), nil
 }
-
-// func (c *CantonGRPCClient) WalletAlreadyInstalled(
-// 	ctx context.Context,
-// 	packageID string,
-// 	endUserParty string,
-// ) (bool, error) {
-
-// 	// 1️⃣ Get ledger end first
-// 	ledgerCmd := exec.Command(
-// 		"grpcurl",
-// 		"-plaintext",
-// 		"-d", `{}`,
-// 		cfg.GRPCHost,
-// 		"com.daml.ledger.api.v2.StateService/GetLedgerEnd",
-// 	)
-
-// 	ledgerOut, err := ledgerCmd.CombinedOutput()
-// 	if err != nil {
-// 		return false, fmt.Errorf("failed to get ledger end: %s", string(ledgerOut))
-// 	}
-
-// 	var ledgerResp struct {
-// 		Offset string `json:"offset"`
-// 	}
-
-// 	if err := json.Unmarshal(ledgerOut, &ledgerResp); err != nil {
-// 		return false, fmt.Errorf("failed to parse ledger end: %w", err)
-// 	}
-
-// 	if ledgerResp.Offset == "" {
-// 		return false, fmt.Errorf("ledger end offset empty")
-// 	}
-
-// 	fmt.Println("Ledger end offset:", ledgerResp.Offset)
-
-// 	// 2️⃣ Query active contracts at ledger end
-// 	payload := map[string]interface{}{
-// 		"active_at_offset": ledgerResp.Offset,
-// 		"event_format": map[string]interface{}{
-// 			"filters_by_party": map[string]interface{}{
-// 				endUserParty: map[string]interface{}{
-// 					"cumulative": map[string]interface{}{},
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	jsonBytes, _ := json.Marshal(payload)
-
-// 	cmd := exec.Command(
-// 		"grpcurl",
-// 		"-plaintext",
-// 		"-d", string(jsonBytes),
-// 		cfg.GRPCHost,
-// 		"com.daml.ledger.api.v2.StateService/GetActiveContracts",
-// 	)
-
-// 	out, err := cmd.CombinedOutput()
-// 	if err != nil {
-// 		return false, fmt.Errorf("wallet existence check failed: %s", string(out))
-// 	}
-
-// 	outStr := string(out)
-
-// 	// 3️⃣ Check for WalletAppInstall template specifically
-// 	if strings.Contains(outStr, `"entityName": "WalletAppInstall"`) {
-// 		fmt.Println("Wallet already installed.")
-// 		return true, nil
-// 	}
-
-// 	fmt.Println("Wallet not installed.")
-// 	return false, nil
-// }
 
 // WalletAlreadyInstalled checks if a WalletAppInstall contract exists for the given party.
 func (c *CantonGRPCClient) WalletAlreadyInstalled(
@@ -199,3 +124,47 @@ func (c *CantonGRPCClient) WalletAlreadyInstalled(
 	return false, nil
 }
 
+// WalletInfo holds username and partyID for a wallet user.
+type WalletInfo struct {
+	Username string `json:"username"`
+	PartyID  string `json:"party_id"`
+}
+
+// GetAllWallets executes the ListUsers gRPC command, parses the output and returns wallet info.
+func (c *CantonGRPCClient) GetAllWallets(ctx context.Context) ([]WalletInfo, error) {
+	cfg := config.Load()
+
+	// Call ListUsers via grpcurl
+	cmd := exec.CommandContext(
+	ctx,
+	"grpcurl",
+	"-plaintext",
+	"-d", `{}`,
+	cfg.GRPCHost,
+	"com.daml.ledger.api.v2.admin.UserManagementService/ListUsers",
+)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("ListUsers failed: %s", string(out))
+	}
+
+	// The output is expected to be a JSON object with "users" array.
+	var resp struct {
+		Users []struct {
+			Id     string `json:"id"`
+			PrimaryParty string `json:"primary_party"`
+		} `json:"users"`
+	}
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse ListUsers output: %w", err)
+	}
+
+	wallets := make([]WalletInfo, 0, len(resp.Users))
+	for _, user := range resp.Users {
+		wallets = append(wallets, WalletInfo{
+			Username: user.Id,
+			PartyID:  user.PrimaryParty,
+		})
+	}
+	return wallets, nil
+}
