@@ -111,7 +111,7 @@ participant.traffic_control.traffic_state(
 TrafficState(
   extraTrafficLimit     = 1,200,000 bytes   // 1.2 MB purchased
   extraTrafficConsumed  = 0 bytes           // nothing used yet
-  baseTrafficRemainder  = 200,000 bytes     // 200KB free allowance
+  baseTrafficRemainder  = 200,000 bytes     // 200KB free allowance (updates every 10 minutes with each round)
   lastConsumedCost      = 0                 // last txn cost = 0
   availableTraffic      = 1,400,000 bytes   // 1.4 MB total available
 )
@@ -124,6 +124,37 @@ TrafficState(
 | Base Traffic | 200,000 bytes | FREE | ✅ Every round |
 | Extra Traffic | 1,200,000 bytes | CC | ❌ Must top up |
 | **Total Available** | **1,400,000 bytes** | | |
+
+**Wallet Creation Limits Based on Base Traffic:**
+
+| Metric | Value |
+| --- | --- |
+| Your base traffic | 200,000 bytes per round (free) |
+| One full wallet | 13,500 bytes |
+| Wallets per round | 200,000 ÷ 13,500 = ~14 wallets (can create free per round) |
+| Per day (144 rounds) | ~2,016 wallets created for free |
+
+**Transfer Limits Based on Base Traffic:**
+
+| Metric | Value |
+| --- | --- |
+| Your base traffic | 200,000 bytes per round (free) |
+| One CC transfer size | ~8 KB (8,192 bytes) |
+| Transfers per round | 200,000 ÷ 8,192 ≈ 24 transfers (can send free per round) |
+| Transfers per day (144 rounds) | 24 × 144 = ~3,456 transfers free per day |
+
+### Visuals Over Time for Traffic Usage
+
+```text
+Round 1:   Extra = 1,200,000 bytes
+Round 2:   Extra = 1,200,000 bytes  (unchanged, not used)
+Round 3:   Extra = 1,200,000 bytes  (unchanged, not used)
+...
+Round N:   You submit big transactions, base runs out
+           Extra = 1,180,000 bytes  (consumed 20,000)
+Round N+1: Extra = 1,180,000 bytes  (stays at 1,180,000)
+           Base  = 200,000 bytes    (resets to full FREE)
+```
 
 ---
 

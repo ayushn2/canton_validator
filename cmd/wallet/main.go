@@ -15,7 +15,7 @@ func main() {
     }
     defer client.Close()
 
-    walletName := "test-wallet-8"
+    walletName := "test-wallet-9"
     partyID, userID, err := client.CreateAndSetupWallet(ctx, walletName)
     if err != nil {
         log.Fatalf("wallet setup failed: %v", err)
