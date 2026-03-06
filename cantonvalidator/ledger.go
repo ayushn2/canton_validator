@@ -1,15 +1,11 @@
 package cantonvalidator
 
 import (
-
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"os/exec"
 	"strings"
-	"github.com/ayushn2/canton_validator/config"
-
 )
 
 func (c *CantonGRPCClient) GetActiveContracts(
@@ -17,6 +13,10 @@ func (c *CantonGRPCClient) GetActiveContracts(
 	party string,
 	offset int64,
 ) (string, error) {
+	adminToken, err := GenerateToken(cfg, cfg.LedgerAPIAdminUser)
+	if err != nil {
+		return "", fmt.Errorf("failed to get admin token: %w", err)
+	}
 
 	payload := fmt.Sprintf(`{
 	  "active_at_offset": %d,
@@ -29,16 +29,11 @@ func (c *CantonGRPCClient) GetActiveContracts(
 	  }
 	}`, offset, party)
 
-	fmt.Println("===== GET ACTIVE CONTRACTS PAYLOAD =====")
-	fmt.Println(payload)
-	fmt.Println("========================================")
-
-	cfg := config.Load()
-
 	cmd := exec.CommandContext(
 		ctx,
 		"grpcurl",
 		"-plaintext",
+		"-H", "Authorization: Bearer "+adminToken,
 		"-d", payload,
 		cfg.GRPCHost,
 		"com.daml.ledger.api.v2.StateService/GetActiveContracts",
@@ -58,10 +53,16 @@ func (c *CantonGRPCClient) WalletAlreadyInstalled(
 	packageID string,
 	endUserParty string,
 ) (bool, error) {
+	adminToken, err := GenerateToken(cfg, cfg.LedgerAPIAdminUser)
+	if err != nil {
+		return false, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
 	// Get ledger end
 	ledgerCmd := exec.Command(
 		"grpcurl",
 		"-plaintext",
+		"-H", "Authorization: Bearer "+adminToken,
 		"-d", `{}`,
 		cfg.GRPCHost,
 		"com.daml.ledger.api.v2.StateService/GetLedgerEnd",
@@ -108,6 +109,7 @@ func (c *CantonGRPCClient) WalletAlreadyInstalled(
 	cmd := exec.Command(
 		"grpcurl",
 		"-plaintext",
+		"-H", "Authorization: Bearer "+adminToken,
 		"-d", string(jsonBytes),
 		cfg.GRPCHost,
 		"com.daml.ledger.api.v2.StateService/GetActiveContracts",
@@ -130,28 +132,31 @@ type WalletInfo struct {
 	PartyID  string `json:"party_id"`
 }
 
-// GetAllWallets executes the ListUsers gRPC command, parses the output and returns wallet info.
+// GetAllWallets returns all users and their party IDs from the ledger.
 func (c *CantonGRPCClient) GetAllWallets(ctx context.Context) ([]WalletInfo, error) {
-	cfg := config.Load()
+	adminToken, err := GenerateToken(cfg, cfg.LedgerAPIAdminUser)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
 
-	// Call ListUsers via grpcurl
 	cmd := exec.CommandContext(
-	ctx,
-	"grpcurl",
-	"-plaintext",
-	"-d", `{}`,
-	cfg.GRPCHost,
-	"com.daml.ledger.api.v2.admin.UserManagementService/ListUsers",
-)
+		ctx,
+		"grpcurl",
+		"-plaintext",
+		"-H", "Authorization: Bearer "+adminToken,
+		"-d", `{}`,
+		cfg.GRPCHost,
+		"com.daml.ledger.api.v2.admin.UserManagementService/ListUsers",
+	)
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("ListUsers failed: %s", string(out))
 	}
 
-	// The output is expected to be a JSON object with "users" array.
 	var resp struct {
 		Users []struct {
-			Id     string `json:"id"`
+			Id           string `json:"id"`
 			PrimaryParty string `json:"primary_party"`
 		} `json:"users"`
 	}

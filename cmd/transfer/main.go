@@ -6,12 +6,13 @@ import (
 	"log"
 
 	"github.com/ayushn2/canton_validator/cantonvalidator"
+	"github.com/ayushn2/canton_validator/db"
 )
 
 const (
-	senderUserID  = "walletB-user"
-	receiverPartyID = "test-wallet-7::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c"
-	amount        = 1.0
+	senderWallet   = "ayush-admin"
+	receiverWallet = "new-test-wallet-3"
+	amount         = "5.0"
 )
 
 func main() {
@@ -23,13 +24,24 @@ func main() {
 	}
 	defer client.Close()
 
-	senderUserID  := senderUserID
-	receiverPartyID := receiverPartyID
-	amount        := amount
+	store, err := db.LoadWalletStore()
+	if err != nil {
+		log.Fatalf("failed to load wallet store: %v", err)
+	}
 
-	fmt.Printf("Transferring %f CC from '%s' to '%s'...\n", amount, senderUserID, receiverPartyID)
+	sender, err := store.Get(senderWallet)
+	if err != nil {
+		log.Fatalf("sender not found in wallet store: %v", err)
+	}
 
-	if err := client.Transfer(ctx, senderUserID, receiverPartyID, fmt.Sprintf("%f", amount)); err != nil {
+	receiver, err := store.Get(receiverWallet)
+	if err != nil {
+		log.Fatalf("receiver not found in wallet store: %v", err)
+	}
+
+	fmt.Printf("Transferring %s CC from '%s' to '%s'...\n", amount, sender.Name, receiver.Name)
+
+	if err := client.Transfer(ctx, sender.Email, sender.Password, receiver.PartyID, amount); err != nil {
 		log.Fatalf("transfer failed: %v", err)
 	}
 

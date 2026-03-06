@@ -232,7 +232,7 @@ Response includes:
 Located in:
 
 ```bash
-cmd/main.go
+cmd/
 ```
 
 Client responsibilities:

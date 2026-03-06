@@ -4,22 +4,35 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+
 	"github.com/ayushn2/canton_validator/cantonvalidator"
 )
 
 func main() {
-    ctx := context.Background()
-    client, err := cantonvalidator.NewCantonGRPCClient()
-    if err != nil {
-        log.Fatalf("failed to create canton client: %v", err)
-    }
-    defer client.Close()
+	ctx := context.Background()
 
-    walletName := "test-wallet-9"
-    partyID, userID, err := client.CreateAndSetupWallet(ctx, walletName)
-    if err != nil {
-        log.Fatalf("wallet setup failed: %v", err)
-    }
+	client, err := cantonvalidator.NewCantonGRPCClient()
+	if err != nil {
+		log.Fatalf("failed to create canton client: %v", err)
+	}
+	defer client.Close()
 
-    fmt.Printf("Wallet '%s' ready. User ID: %s, Party ID: %s\n", walletName, userID, partyID)
+	walletName := "new-test-wallet-6"
+	email := "new-test-wallet-6@scopex.money"
+	password := "StrongPassword123!"
+
+	wallet, err := client.CreateWallet(ctx, walletName, email, password)
+	if err != nil {
+		log.Fatalf("wallet creation failed: %v", err)
+	}
+
+	fmt.Printf("\n✅ Wallet '%s' ready.\n", walletName)
+	fmt.Printf("   Auth0 User ID : %s\n", wallet.Auth0UserID)
+	fmt.Printf("   Email         : %s\n", wallet.Email)
+	fmt.Printf("   Canton User ID: %s\n", wallet.UserID)
+	fmt.Printf("   Party ID      : %s::%s\n",
+	strings.ReplaceAll(wallet.Auth0UserID, "|", "_"),
+	strings.Split(wallet.PartyID, "::")[1],
+	)
 }
