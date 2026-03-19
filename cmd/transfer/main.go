@@ -11,7 +11,7 @@ import (
 
 const (
 	senderWallet   = "ayush-admin"
-	receiverWallet = "new-test-wallet-3"
+	receiverWallet = "new-test-wallet-4"
 	amount         = "5.0"
 )
 
