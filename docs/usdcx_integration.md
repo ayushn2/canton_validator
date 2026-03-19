@@ -33,7 +33,8 @@ Circle and Digital Asset have partnered to bring **USDC onto the Canton Network 
 The only values that differ between testnet and mainnet are the party IDs and backend URL. Everything else — commands, DAR names, API paths — is identical.
 
 ### Testnet
-```
+
+```bash
 UTILITY_BACKEND_URL=https://api.utilities.digitalasset-staging.com
 ADMIN_PARTY_ID=decentralized-usdc-interchain-rep::122049e2af8a725bd19759320fc83c638e7718973eac189d8f201309c512d1ffec61
 UTILITY_OPERATOR_PARTY_ID=DigitalAsset-UtilityOperator::12202679f2bbe57d8cba9ef3cee847ac8239df0877105ab1f01a77d47477fdce1204
@@ -41,7 +42,8 @@ BRIDGE_OPERATOR_PARTY_ID=Bridge-Operator::12209d011ce250de439fefc35d16d1ab9d56fb
 ```
 
 ### Mainnet
-```
+
+```bash
 UTILITY_BACKEND_URL=https://api.utilities.digitalasset.com
 ADMIN_PARTY_ID=decentralized-usdc-interchain-rep::12208115f1e168dd7e792320be9c4ca720c751a02a3053c7606e1c1cd3dad9bf60ef
 UTILITY_OPERATOR_PARTY_ID=auth0_007c6643538f2eadd3e573dd05b9::12205bcc106efa0eaa7f18dc491e5c6f5fb9b0cc68dc110ae66f4ed6467475d7c78e
@@ -49,7 +51,8 @@ BRIDGE_OPERATOR_PARTY_ID=Bridge-Operator::1220c8448890a70e65f6906bd48d797ee6551f
 ```
 
 ### Your validator (fill in)
-```
+
+```bash
 VALIDATOR_URL=https://<your-validator-domain>
 LEDGER_URL=https://<your-ledger-api-domain>
 TOKEN=<your-jwt-token>
@@ -138,7 +141,8 @@ docker logs -f <cub-darsyncer-container-name> 2>&1 | head -50
 ```
 
 Expected output:
-```
+
+```bash
 successfully uploaded: utility-bridge-app-v0-0.1.3.dar
 successfully uploaded: utility-bridge-v0-0.1.3.dar
 the ledger has all of our packages, as expected
@@ -193,7 +197,7 @@ print('Exact package hash needed:', pkg_hash)
 ```
 
 Cross-reference this hash against the DAR versions page to find the correct bundle version:
-https://docs.digitalasset.com/utilities/devnet/reference/dar-versions/dar-versions.html
+<https://docs.digitalasset.com/utilities/devnet/reference/dar-versions/dar-versions.html>
 
 ### Download the bundle
 
@@ -294,6 +298,13 @@ Expected: `HTTP:200` with a `transactionId` and a `BridgeUserAgreementRequest` c
 After submitting the request, Circle's bridge operator must approve it. On testnet this is automated. On mainnet it may take longer.
 
 ```bash
+# Get current ledger end offset
+OFFSET=$(curl -s https://<LEDGER_URL>/v2/state/ledger-end \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['offset'])")
+
+echo "Current offset: $OFFSET"
+
+# Poll for BridgeUserAgreement contract
 curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -303,24 +314,33 @@ curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
         \"$USER_PARTY_ID\": {
           \"cumulative\": [
             {
-              \"wildcardFilter\": {
-                \"includeCreatedEventBlob\": false
+              \"identifierFilter\": {
+                \"WildcardFilter\": {
+                  \"value\": {
+                    \"includeCreatedEventBlob\": false
+                  }
+                }
               }
             }
           ]
         }
       }
     },
-    \"verbose\": false
+    \"verbose\": false,
+    \"activeAtOffset\": $OFFSET
   }" | python3 -c "
 import sys
 raw = sys.stdin.read()
-if 'BridgeUserAgreement' in raw:
+if 'BridgeUserAgreement' in raw and 'Request' not in raw[raw.find('BridgeUserAgreement'):raw.find('BridgeUserAgreement')+30]:
     print('✅ Approved — party is fully onboarded to xReserve')
+elif 'BridgeUserAgreementRequest' in raw:
+    print('⏳ Request exists but not yet approved — try again in a few minutes')
 else:
     print('⏳ Pending approval — try again in a few minutes')
 "
 ```
+
+> **Note:** The `activeAtOffset` parameter is required for this API version. Always fetch the current ledger end offset first before querying active contracts.
 
 Once approved, the party has a `BridgeUserAgreement` contract on Canton and is fully USDCx-enabled.
 
@@ -351,6 +371,7 @@ curl -s -X POST ${UTILITY_BACKEND_URL}/api/utilities/v0/registry/burn-mint-instr
 ```
 
 Extract from response:
+
 - `factoryId` → `FACTORY_CID`
 - `choiceContext.choiceContextData.values` → `CONTEXT_CONTRACT_IDS`
 - `choiceContext.disclosedContracts` → `DISCLOSED_CONTRACTS`
@@ -452,7 +473,7 @@ Before running on mainnet, confirm every item:
 ## Troubleshooting
 
 | Error | Cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `HTTP 413` on DAR upload | nginx body size limit | Add `client_max_body_size 50m` to `nginx.conf` and reload |
 | `failed package name resolution: utility-registry-app-v0` | Registry DAR missing or wrong version | Re-run factory hash check and upload correct bundle version |
 | `Missing required field at commands.commandId` | Wrong JSON structure | Use nested `commands` object format as shown in Step 6 |
@@ -464,9 +485,9 @@ Before running on mainnet, confirm every item:
 
 ## Key References
 
-- USDCx Wallet Integration: https://docs.digitalasset.com/integrate/devnet/usdcx-support/index.html
-- xReserve Workflows: https://docs.digitalasset.com/usdc/xreserve/workflows.html
-- Mainnet Technical Setup: https://docs.digitalasset.com/usdc/xreserve/mainnet-technical-setup.html
-- TestNet Details: https://docs.digitalasset.com/usdc/xreserve/testnet-technical-setup.html
-- Utility DAR Versions: https://docs.digitalasset.com/utilities/devnet/reference/dar-versions/dar-versions.html
-- CIP-56 Token Standard: https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md
+- USDCx Wallet Integration: <https://docs.digitalasset.com/integrate/devnet/usdcx-support/index.html>
+- xReserve Workflows: <https://docs.digitalasset.com/usdc/xreserve/workflows.html>
+- Mainnet Technical Setup: <https://docs.digitalasset.com/usdc/xreserve/mainnet-technical-setup.html>
+- TestNet Details: <https://docs.digitalasset.com/usdc/xreserve/testnet-technical-setup.html>
+- Utility DAR Versions: <https://docs.digitalasset.com/utilities/devnet/reference/dar-versions/dar-versions.html>
+- CIP-56 Token Standard: <https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md>
