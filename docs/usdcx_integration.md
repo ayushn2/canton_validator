@@ -18,12 +18,13 @@ Do NOT proceed with USDCx integration until all of the above are confirmed.
 
 Circle and Digital Asset have partnered to bring **USDC onto the Canton Network as USDCx** — a CIP-56 Token Standard compliant stablecoin. Users lock real USDC on Ethereum via Circle's `xReserve` contract, which mints USDCx on Canton. Burning USDCx on Canton releases USDC back on Ethereum.
 
-### Three Operations
+### Four Operations
 
 | Operation | Trigger | Frequency |
 | --- | --- | --- |
 | **Onboard** | Register party with xReserve bridge | Once per party |
 | **Mint** | User deposits USDC on Ethereum | On demand |
+| **Check Balance** | Query USDCx holdings on Canton | On demand |
 | **Burn** | User withdraws USDCx to Ethereum | On demand |
 
 ---
@@ -56,9 +57,21 @@ BRIDGE_OPERATOR_PARTY_ID=Bridge-Operator::1220c8448890a70e65f6906bd48d797ee6551f
 VALIDATOR_URL=https://<your-validator-domain>
 LEDGER_URL=https://<your-ledger-api-domain>
 TOKEN=<your-jwt-token>
+USER_PARTY_ID=<party-id-to-onboard>
+SYNC_ID=<your-synchronizer-id>
 ```
 
-Throughout this guide, replace `<VALIDATOR_URL>`, `<LEDGER_URL>`, and `<TOKEN>` with your values. All party IDs above are fixed — do not change them.
+> `SYNC_ID` looks like `global-domain::1220f22a8b8f...`. Get it by running:
+>
+> ```bash
+> curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
+>   -H "Authorization: Bearer $TOKEN" \
+>   -H "Content-Type: application/json" \
+>   -d '{"filter":{"filtersForAnyParty":{"cumulative":[{"identifierFilter":{"WildcardFilter":{"value":{"includeCreatedEventBlob":false}}}}]}},"verbose":false,"activeAtOffset":1}' \
+>   | python3 -c "import sys,re; print(re.search(r'synchronizerId[\":]+([^\"]+)\"', sys.stdin.read()).group(1))"
+> ```
+
+Throughout this guide, replace all `<placeholders>` with your values. All party IDs in the environment variable tables above are fixed — do not change them.
 
 ---
 
@@ -89,11 +102,8 @@ CUB_IMAGE_VERSION="0.3.0"
 CROSS_CHAIN_REPRESENTATIVE_PARTY_ID="<ADMIN_PARTY_ID>"
 UTILITY_BACKEND_URL="<UTILITY_BACKEND_URL>"
 EOF
-```
 
-Verify:
-
-```bash
+# Verify
 tail -6 .env
 ```
 
@@ -122,7 +132,7 @@ Open your `compose.yaml` and add the following service block inside the `service
       - <your-docker-network>
 ```
 
-> Replace `CLIENT_ID`, `CLIENT_SECRET`, and `OAUTH_DOMAIN` with your M2M credentials. These are the same credentials your validator uses to authenticate with the ledger API. Replace `<your-docker-network>` with the network name used by your other services.
+> Replace `CLIENT_ID`, `CLIENT_SECRET`, and `OAUTH_DOMAIN` with your M2M credentials. These are the same credentials your validator uses to authenticate with the ledger API.
 
 Validate, pull, and start:
 
@@ -133,7 +143,7 @@ docker compose config --quiet && echo "✅ valid" || echo "❌ errors"
 # Pull the image
 docker compose pull cub-darsyncer
 
-# Start darsyncer only (no need to restart everything)
+# Start darsyncer only
 docker compose up -d cub-darsyncer
 
 # Watch logs — confirm both DARs uploaded successfully
@@ -298,7 +308,7 @@ Expected: `HTTP:200` with a `transactionId` and a `BridgeUserAgreementRequest` c
 After submitting the request, Circle's bridge operator must approve it. On testnet this is automated. On mainnet it may take longer.
 
 ```bash
-# Get current ledger end offset
+# Get current ledger end offset (required for this API version)
 OFFSET=$(curl -s https://<LEDGER_URL>/v2/state/ledger-end \
   -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['offset'])")
 
@@ -346,40 +356,174 @@ Once approved, the party has a `BridgeUserAgreement` contract on Canton and is f
 
 ---
 
-## Step 8 — Mint USDCx (After Ethereum Deposit)
+## Step 8 — Deposit USDC on Ethereum (to get USDCx)
 
-When a user deposits USDC on Ethereum, Circle creates a `DepositAttestation` on Canton. Call `BridgeUserAgreement_Mint` to claim it.
+Before minting, you need real USDC on Ethereum (or testnet USDC on Sepolia for testnet).
 
-First get the required contract IDs from the factory:
+### Testnet — Get testnet USDC and ETH
+
+1. Get Sepolia ETH (for gas):
+   - <https://cloud.google.com/application/web3/faucet/ethereum/sepolia>
+   - <https://sepoliafaucet.com>
+
+2. Get testnet USDC from Circle:
+   - <https://faucet.circle.com> — select Sepolia, paste your MetaMask address
+
+3. Add testnet USDC to MetaMask (import token):
+
+   ```bash
+   Contract: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+   ```
+
+### Deposit via xReserve UI
+
+1. Go to: <https://digital-asset.github.io/xreserve-deposits/>
+2. Connect your MetaMask wallet
+3. Enter the **Canton recipient party ID** (`USER_PARTY_ID`)
+4. Enter the amount (start small — e.g. `1`)
+5. Click **Deposit** — approve 2 MetaMask transactions:
+   - Transaction 1: Approve USDC spending allowance
+   - Transaction 2: depositToRemote to xReserve contract
+6. Wait **13-15 minutes** for Ethereum finality
+
+### Check for DepositAttestation on Canton
+
+After waiting, poll until Circle creates the `DepositAttestation`:
 
 ```bash
-curl -s -X POST ${UTILITY_BACKEND_URL}/api/utilities/v0/registry/burn-mint-instruction/v0/burn-mint-factory \
+OFFSET=$(curl -s https://<LEDGER_URL>/v2/state/ledger-end \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['offset'])")
+
+curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
-    \"instrumentId\": {
-      \"admin\": \"${ADMIN_PARTY_ID}\",
-      \"id\": \"USDCx\"
-    },
-    \"inputHoldingCids\": [],
-    \"outputs\": [
-      {
-        \"owner\": \"${ADMIN_PARTY_ID}\",
-        \"amount\": \"<AMOUNT_TO_MINT>\"
+    \"filter\": {
+      \"filtersByParty\": {
+        \"$USER_PARTY_ID\": {
+          \"cumulative\": [{
+            \"identifierFilter\": {
+              \"WildcardFilter\": {
+                \"value\": {\"includeCreatedEventBlob\": false}
+              }
+            }
+          }]
+        }
       }
-    ]
-  }"
+    },
+    \"verbose\": false,
+    \"activeAtOffset\": $OFFSET
+  }" | python3 -c "
+import sys, re
+raw = sys.stdin.read()
+if 'DepositAttestation' in raw:
+    print('✅ DepositAttestation found - ready to mint!')
+    idx = raw.find('DepositAttestation')
+    match = re.search(r'\"contractId\":\"([^\"]+)\"', raw[max(0,idx-300):idx+100])
+    if match:
+        print('DepositAttestation CID:', match.group(1))
+else:
+    print('⏳ Not yet — wait a few more minutes and try again')
+"
 ```
 
-Extract from response:
+---
 
-- `factoryId` → `FACTORY_CID`
-- `choiceContext.choiceContextData.values` → `CONTEXT_CONTRACT_IDS`
-- `choiceContext.disclosedContracts` → `DISCLOSED_CONTRACTS`
+## Step 9 — Mint USDCx
 
-Then submit the mint:
+Once the `DepositAttestation` appears, call `BridgeUserAgreement_Mint` to claim the USDC as USDCx holdings on Canton.
+
+### Get required contract IDs
 
 ```bash
-curl -s -X POST https://<LEDGER_URL>/v2/commands/submit-and-wait-for-transaction \
+# Get DepositAttestation CID
+DEPOSIT_ATTESTATION_CID=$(curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"filter\": {
+      \"filtersByParty\": {
+        \"$USER_PARTY_ID\": {
+          \"cumulative\": [{\"identifierFilter\": {\"WildcardFilter\": {\"value\": {\"includeCreatedEventBlob\": false}}}}]
+        }
+      }
+    },
+    \"verbose\": false,
+    \"activeAtOffset\": $OFFSET
+  }" | python3 -c "
+import sys, re
+raw = sys.stdin.read()
+idx = raw.find('DepositAttestation')
+match = re.search(r'\"contractId\":\"([^\"]+)\"', raw[max(0,idx-300):idx+100])
+if match: print(match.group(1))
+")
+
+# Get BridgeUserAgreement CID
+BRIDGE_AGREEMENT_CID=$(curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"filter\": {
+      \"filtersByParty\": {
+        \"$USER_PARTY_ID\": {
+          \"cumulative\": [{\"identifierFilter\": {\"WildcardFilter\": {\"value\": {\"includeCreatedEventBlob\": false}}}}]
+        }
+      }
+    },
+    \"verbose\": false,
+    \"activeAtOffset\": $OFFSET
+  }" | python3 -c "
+import sys, re
+raw = sys.stdin.read()
+idx = raw.find('BridgeUserAgreement\"')
+match = re.search(r'\"contractId\":\"([^\"]+)\"', raw[max(0,idx-300):idx+100])
+if match: print(match.group(1))
+")
+
+# Get factory context
+FACTORY_RESPONSE=$(curl -s -X POST ${UTILITY_BACKEND_URL}/api/utilities/v0/registry/burn-mint-instruction/v0/burn-mint-factory \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"instrumentId\": {\"admin\": \"${ADMIN_PARTY_ID}\", \"id\": \"USDCx\"},
+    \"inputHoldingCids\": [],
+    \"outputs\": []
+  }")
+
+FACTORY_CID=$(echo $FACTORY_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['factoryId'])")
+
+CONTEXT_IDS=$(echo $FACTORY_RESPONSE | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+values = data['choiceContext']['choiceContextData']['values']
+print(json.dumps({
+    'instrumentConfigurationCid': values['utility.digitalasset.com/instrument-configuration']['value'],
+    'appRewardConfigurationCid': values['utility.digitalasset.com/app-reward-configuration']['value'],
+    'featuredAppRightCid': values['utility.digitalasset.com/featured-app-right']['value']
+}))
+")
+
+# Add synchronizerId to disclosed contracts (required by this API version)
+DISCLOSED=$(echo $FACTORY_RESPONSE | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+contracts = data['choiceContext']['disclosedContracts']
+for c in contracts:
+    c['synchronizerId'] = '<SYNC_ID>'
+print(json.dumps(contracts))
+")
+
+echo "DepositAttestation CID: $DEPOSIT_ATTESTATION_CID"
+echo "BridgeAgreement CID:    $BRIDGE_AGREEMENT_CID"
+echo "Factory CID:            $FACTORY_CID"
+```
+
+> **Important:** Replace `<SYNC_ID>` in the `DISCLOSED` extraction above with your actual synchronizer ID.
+
+### Submit the Mint
+
+```bash
+curl -s -w "\nHTTP:%{http_code}" \
+  -X POST https://<LEDGER_URL>/v2/commands/submit-and-wait-for-transaction \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
@@ -391,29 +535,114 @@ curl -s -X POST https://<LEDGER_URL>/v2/commands/submit-and-wait-for-transaction
         {
           \"ExerciseCommand\": {
             \"templateId\": \"#utility-bridge-v0:Utility.Bridge.V0.Agreement.User:BridgeUserAgreement\",
-            \"contractId\": \"<BRIDGE_USER_AGREEMENT_CONTRACT_ID>\",
+            \"contractId\": \"$BRIDGE_AGREEMENT_CID\",
             \"choice\": \"BridgeUserAgreement_Mint\",
             \"choiceArgument\": {
-              \"depositAttestationCid\": \"<DEPOSIT_ATTESTATION_CID>\",
-              \"factoryCid\": \"<FACTORY_CID>\",
-              \"contextContractIds\": <CONTEXT_CONTRACT_IDS>
+              \"depositAttestationCid\": \"$DEPOSIT_ATTESTATION_CID\",
+              \"factoryCid\": \"$FACTORY_CID\",
+              \"contextContractIds\": $CONTEXT_IDS
             }
           }
         }
       ],
-      \"disclosedContracts\": <DISCLOSED_CONTRACTS>
+      \"disclosedContracts\": $DISCLOSED
     }
   }"
 ```
 
-> The `FACTORY_CID`, `CONTEXT_CONTRACT_IDS`, and `DISCLOSED_CONTRACTS` values can be cached — they change infrequently. Refresh them periodically rather than on every call.
+Expected: `HTTP:200` with a `CreatedEvent` for `Utility.Registry.Holding.V0.Holding:Holding` — this is your USDCx holding.
 
 ---
 
-## Step 9 — Burn USDCx (Withdraw to Ethereum)
+## Step 10 — Check USDCx Balance
+
+Query your active USDCx holdings on Canton:
 
 ```bash
-curl -s -X POST https://<LEDGER_URL>/v2/commands/submit-and-wait-for-transaction \
+OFFSET=$(curl -s https://<LEDGER_URL>/v2/state/ledger-end \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['offset'])")
+
+curl -s -X POST https://<LEDGER_URL>/v2/state/active-contracts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"filter\": {
+      \"filtersByParty\": {
+        \"$USER_PARTY_ID\": {
+          \"cumulative\": [{
+            \"identifierFilter\": {
+              \"WildcardFilter\": {
+                \"value\": {\"includeCreatedEventBlob\": false}
+              }
+            }
+          }]
+        }
+      }
+    },
+    \"verbose\": false,
+    \"activeAtOffset\": $OFFSET
+  }" | python3 -c "
+import sys, json
+raw = sys.stdin.read()
+data = json.loads(raw)
+total = 0
+holding_cids = []
+for entry in data:
+    contract = entry.get('contractEntry', {}).get('JsActiveContract', {})
+    created = contract.get('createdEvent', {})
+    template = created.get('templateId', '')
+    args = created.get('createArgument', {})
+    if 'USDCx' in str(args) or 'Holding' in template:
+        amount = float(args.get('amount', 0))
+        total += amount
+        holding_cids.append(created.get('contractId', ''))
+        print(f'Holding: {amount} USDCx — CID: {created.get(\"contractId\", \"\")[:40]}...')
+print(f'Total USDCx balance: {total}')
+print(f'Holding contract IDs: {holding_cids}')
+"
+```
+
+> **Note:** USDCx holdings do NOT appear in the standard Canton wallet UI — the wallet UI only shows Canton Coin (CC). USDCx must be queried via the ledger API as shown above.
+
+---
+
+## Step 11 — Burn USDCx (Withdraw to Ethereum)
+
+To withdraw USDCx back to Ethereum, burn the holding on Canton. Get your holding contract IDs from Step 10 first.
+
+```bash
+# Get fresh factory context for burn
+FACTORY_RESPONSE=$(curl -s -X POST ${UTILITY_BACKEND_URL}/api/utilities/v0/registry/burn-mint-instruction/v0/burn-mint-factory \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"instrumentId\": {\"admin\": \"${ADMIN_PARTY_ID}\", \"id\": \"USDCx\"},
+    \"inputHoldingCids\": [\"<HOLDING_CONTRACT_ID>\"],
+    \"outputs\": []
+  }")
+
+FACTORY_CID=$(echo $FACTORY_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['factoryId'])")
+CONTEXT_IDS=$(echo $FACTORY_RESPONSE | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+values = data['choiceContext']['choiceContextData']['values']
+print(json.dumps({
+    'instrumentConfigurationCid': values['utility.digitalasset.com/instrument-configuration']['value'],
+    'appRewardConfigurationCid': values['utility.digitalasset.com/app-reward-configuration']['value'],
+    'featuredAppRightCid': values['utility.digitalasset.com/featured-app-right']['value']
+}))
+")
+DISCLOSED=$(echo $FACTORY_RESPONSE | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+contracts = data['choiceContext']['disclosedContracts']
+for c in contracts:
+    c['synchronizerId'] = '<SYNC_ID>'
+print(json.dumps(contracts))
+")
+
+# Submit Burn
+curl -s -w "\nHTTP:%{http_code}" \
+  -X POST https://<LEDGER_URL>/v2/commands/submit-and-wait-for-transaction \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{
@@ -425,29 +654,30 @@ curl -s -X POST https://<LEDGER_URL>/v2/commands/submit-and-wait-for-transaction
         {
           \"ExerciseCommand\": {
             \"templateId\": \"#utility-bridge-v0:Utility.Bridge.V0.Agreement.User:BridgeUserAgreement\",
-            \"contractId\": \"<BRIDGE_USER_AGREEMENT_CONTRACT_ID>\",
+            \"contractId\": \"$BRIDGE_AGREEMENT_CID\",
             \"choice\": \"BridgeUserAgreement_Burn\",
             \"choiceArgument\": {
-              \"amount\": \"<AMOUNT_IN_DECIMAL_MAX_6_PLACES>\",
+              \"amount\": \"<AMOUNT_MAX_6_DECIMAL_PLACES>\",
               \"destinationDomain\": \"0\",
               \"destinationRecipient\": \"<ETHEREUM_ADDRESS>\",
-              \"holdingCids\": <HOLDING_CONTRACT_IDS>,
-              \"requestId\": \"<UUID>\",
+              \"holdingCids\": [\"<HOLDING_CONTRACT_ID>\"],
+              \"requestId\": \"$(python3 -c 'import uuid; print(uuid.uuid4())')\",
               \"reference\": \"\",
-              \"factoryCid\": \"<FACTORY_CID>\",
-              \"contextContractIds\": <CONTEXT_CONTRACT_IDS>
+              \"factoryCid\": \"$FACTORY_CID\",
+              \"contextContractIds\": $CONTEXT_IDS
             }
           }
         }
       ],
-      \"disclosedContracts\": <DISCLOSED_CONTRACTS>
+      \"disclosedContracts\": $DISCLOSED
     }
   }"
 ```
 
 > `destinationDomain: "0"` = Ethereum. Only Ethereum is currently supported.
 > `amount` supports up to 6 decimal places.
-> `requestId` must be a unique UUID per withdrawal request.
+> `requestId` must be a unique UUID per withdrawal — never reuse.
+> After burning, USDC will appear in your Ethereum wallet within minutes of Canton finality.
 
 ---
 
@@ -464,6 +694,7 @@ Before running on mainnet, confirm every item:
 - [ ] nginx `client_max_body_size 50m` is set
 - [ ] `BridgeUserAgreementRequest` submitted for each party
 - [ ] `BridgeUserAgreement` confirmed via active contracts poll
+- [ ] `SYNC_ID` confirmed for your mainnet synchronizer
 - [ ] Test mint with smallest possible amount before going live
 
 ⚠️ **Mainnet warning:** All transactions involve real USDC. Always test with the smallest possible amount first.
@@ -477,9 +708,13 @@ Before running on mainnet, confirm every item:
 | `HTTP 413` on DAR upload | nginx body size limit | Add `client_max_body_size 50m` to `nginx.conf` and reload |
 | `failed package name resolution: utility-registry-app-v0` | Registry DAR missing or wrong version | Re-run factory hash check and upload correct bundle version |
 | `Missing required field at commands.commandId` | Wrong JSON structure | Use nested `commands` object format as shown in Step 6 |
+| `Missing required field at synchronizerId` | Disclosed contracts missing synchronizer ID | Add `synchronizerId` field to each disclosed contract |
+| `Missing required field at value` | Wrong filter structure for active-contracts | Use `WildcardFilter: { value: { includeCreatedEventBlob: false } }` format |
 | `BridgeUserAgreementRequest` stuck pending | Bridge operator approval pending | Normal — poll again after a few minutes |
 | DAR upload returns `{}` with `HTTP 200` | DAR already uploaded | Safe to ignore |
 | `HTTP 400` on empty payload | Endpoint exists but needs valid body | Expected — not an error |
+| USDCx not visible in wallet UI | Wallet UI only shows CC | Query holdings via ledger API as shown in Step 10 |
+| `DepositAttestation` not appearing | Ethereum finality not reached yet | Wait full 15 minutes after Ethereum tx confirmed |
 
 ---
 
@@ -491,3 +726,5 @@ Before running on mainnet, confirm every item:
 - TestNet Details: <https://docs.digitalasset.com/usdc/xreserve/testnet-technical-setup.html>
 - Utility DAR Versions: <https://docs.digitalasset.com/utilities/devnet/reference/dar-versions/dar-versions.html>
 - CIP-56 Token Standard: <https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md>
+- xReserve Deposit UI (testnet): <https://digital-asset.github.io/xreserve-deposits/>
+- Circle Testnet Faucet: <https://faucet.circle.com>
