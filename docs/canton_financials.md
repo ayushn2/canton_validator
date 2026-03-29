@@ -240,7 +240,7 @@ participant.traffic_control.traffic_state(
 TrafficState(
   extraTrafficLimit     = 1,200,000 bytes   // 1.2 MB purchased with CC
   extraTrafficConsumed  = 0 bytes           // nothing used yet
-  baseTrafficRemainder  = 200,000 bytes     // 200KB free — resets every 20 min
+  baseTrafficRemainder  = 200,000 bytes     // 200KB free — resets every 10 min
   lastConsumedCost      = 0                 // last txn consumed 0 bytes
   availableTraffic      = 1,400,000 bytes   // total available right now
 )
