@@ -16,7 +16,7 @@ Do NOT proceed with USDCx integration until all of the above are confirmed.
 
 ## Overview
 
-Circle and Digital Asset have partnered to bring **USDC onto the Canton Network as USDCx** — a CIP-56 Token Standard compliant stablecoin. Users lock real USDC on Ethereum via Circle's `xReserve` contract, which mints USDCx on Canton. Burning USDCx on Canton releases USDC back on Ethereum.
+Circle and Digital Asset have partnered to bring **USDC onto the Canton Network as USDCx** — a CIP-56 Token Standard compliant stablecoin. Users lock real USDC on Ethereum via Circle's `xReserve` contract, which mints USDCx on Canton. Burning USDCx on Canton releases USDC back on aEthereum.
 
 ### Four Operations
 
