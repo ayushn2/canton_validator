@@ -1,7 +1,0 @@
-to get hosted parties on our party run this inside console
-
-participant.parties.hosted()
-
-creation: 0
-activate: 10kB
-pre-approval: 3-4kB
