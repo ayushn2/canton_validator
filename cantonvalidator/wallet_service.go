@@ -12,6 +12,8 @@ import (
 	"github.com/ayushn2/canton_validator/db"
 )
 
+// Use topology-specific config for wallet operations, which may differ from the main GRPC client config and help scale the number of wallets created
+
 // WalletUser holds the result of a successful CreateWallet call
 type WalletUser struct {
 	Auth0UserID string // e.g. auth0|xxxxxxxxx
