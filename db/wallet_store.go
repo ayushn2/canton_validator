@@ -10,12 +10,14 @@ const walletStoreFile = "wallets/wallets.json" // root/wallets/wallets.json
 
 // WalletEntry holds all credentials and IDs for a wallet
 type WalletEntry struct {
-	Name        string `json:"name"`         // e.g. "walletB"
-	Email       string `json:"email"`        // Auth0 email
-	Password    string `json:"password"`     // Auth0 password
-	Auth0UserID string `json:"auth0_user_id"` // e.g. auth0|xxxxxxxxx
-	CantonUserID string `json:"canton_user_id"` // e.g. walletB-user
-	PartyID     string `json:"party_id"`     // full Canton party ID
+	Name         string `json:"name"`          // e.g. "walletB"
+	Email        string `json:"email"`         // Auth0 email (standard flow only)
+	Password     string `json:"password"`      // Auth0 password (standard flow only)
+	Auth0UserID  string `json:"auth0_user_id"` // e.g. auth0|xxxxxxxxx (standard flow only)
+	CantonUserID string `json:"canton_user_id"` // e.g. walletB-user (standard flow only)
+	PartyID      string `json:"party_id"`      // full Canton party ID
+	PublicKeyHex  string `json:"public_key_hex,omitempty"`  // hex ed25519 public key (external party flow)
+	PrivateKeyHex string `json:"private_key_hex,omitempty"` // hex ed25519 private key (external party flow) ⚠️ encrypt in prod
 }
 
 // WalletStore holds all wallets

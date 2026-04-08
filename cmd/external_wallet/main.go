@@ -17,15 +17,15 @@ func main() {
 	}
 	defer client.Close()
 
-	walletName := "new-test-wallet-6"
+	walletName := "ext-wallet-1"
 
 	wallet, err := client.CreateExternalWallet(ctx, walletName)
 	if err != nil {
-		log.Fatalf("wallet creation failed: %v", err)
+		log.Fatalf("external wallet creation failed: %v", err)
 	}
 
-	fmt.Printf("\n✅ Wallet '%s' ready.\n", walletName)
-	fmt.Printf("   Party ID   : %s\n", wallet.PartyID)
-	fmt.Printf("   Public Key : %s\n", wallet.PublicKeyHex)
+	fmt.Printf("\n✅ External wallet '%s' ready.\n", walletName)
+	fmt.Printf("   Party ID      : %s\n", wallet.PartyID)
+	fmt.Printf("   Public Key    : %s\n", wallet.PublicKeyHex)
 	fmt.Printf("   ⚠️  Private key stored in wallets/wallets.json — encrypt before production.\n")
 }
