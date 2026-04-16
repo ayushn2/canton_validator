@@ -26,7 +26,7 @@ event just happened through this Featured App."
 
 **What it contains:**
 
-- provider: your validator party (scopex-validator-1::1220...)
+- provider: your validator party
 - beneficiary: who gets the minting right (usually same as provider)
 - weight: set to $1 by default (the featuredAppActivityMarkerAmount)
 
@@ -81,7 +81,7 @@ mintable the following mining round, if rewards are not redeemed then they are l
 
 **Examples:**
 
-- Your validator party: `scopex-validator-1::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c`
+- Your validator party: `name-validator-1::12205f40f735c6d338ec14f0bcebe8de5c43f670ec9bb2666ede81806353a30a394c`
 - A user party: `user-123::12205f40...`
 
 **Why it matters:** The reward system attributes rewards to parties, not to nodes. Your
@@ -94,8 +94,6 @@ hosting a user's party on your node is not enough.
 
 **What it is:** Your validator's party ID when it's registered as a Featured App. This is
 the party that the FeaturedAppRight is granted to, and the party that earns minting rights.
-
-**For ScopeX:** This is `scopex-validator-1::1220...`
 
 ---
 
@@ -124,7 +122,7 @@ Traffic is bought with CC and is the main operating cost for running apps.
 **What it is:** The interface your applications use to interact with your participant node.
 You submit transactions, query contracts, and upload packages through it.
 
-**Your Ledger API:** Accessible at `https://canton.scopex.app/ledger/v2/...` (through nginx)
+**Your Ledger API:** Accessible at `https://<url>/ledger/v2/...` (through nginx)
 or at `localhost:7575` inside the participant container.
 
 **Authentication:** Requires an Auth0 M2M token (using VALIDATOR_CLIENT_ID and
