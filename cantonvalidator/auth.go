@@ -61,14 +61,14 @@ func GenerateToken(cfg *config.Config, userID string) (string, error) {
 func GetUserToken(cfg *config.Config, username string, password string) (string, error) {
 	switch cfg.AuthMode {
 	case "auth0":
-		return fetchUserToken(cfg, username, password)
+		return FetchUserToken(cfg, username, password)
 	default: // "unsafe"
 		fmt.Printf("[auth] mode: unsafe (HS256 JWT) — user: %s\n", username)
 		return generateUnsafeJWT(cfg, username)
 	}
 }
 
-func fetchUserToken(cfg *config.Config, username string, password string) (string, error) {
+func FetchUserToken(cfg *config.Config, username string, password string) (string, error) {
 	payload := map[string]string{
 		"grant_type":    "password",
 		"client_id":     cfg.Auth0ClientID,
@@ -151,7 +151,7 @@ func getAuth0TokenCached(cfg *config.Config) (string, error) {
 		return cache.token, nil
 	}
 
-	token, expiresIn, err := fetchAuth0Token(cfg)
+	token, expiresIn, err := FetchAuth0Token(cfg)
 	if err != nil {
 		return "", err
 	}
@@ -162,7 +162,7 @@ func getAuth0TokenCached(cfg *config.Config) (string, error) {
 	return cache.token, nil
 }
 
-func fetchAuth0Token(cfg *config.Config) (string, int, error) {
+func FetchAuth0Token(cfg *config.Config) (string, int, error) {
 	if cfg.Auth0Domain == "" || cfg.Auth0ClientID == "" || cfg.Auth0ClientSecret == "" || cfg.Auth0Audience == "" {
 		return "", 0, fmt.Errorf(
 			"auth0 config incomplete: ensure AUTH0_DOMAIN, VALIDATOR_AUTH_CLIENT_ID, VALIDATOR_AUTH_CLIENT_SECRET, VALIDATOR_AUTH_AUDIENCE are set",
@@ -215,7 +215,7 @@ func fetchAuth0Token(cfg *config.Config) (string, int, error) {
 // Uses management API audience instead of Canton audience
 // ─────────────────────────────────────────────
 
-func fetchAuth0ManagementToken(cfg *config.Config) (string, error) {
+func FetchAuth0ManagementToken(cfg *config.Config) (string, error) {
 	payload := map[string]string{
 		"grant_type":    "client_credentials",
 		"client_id":     cfg.Auth0ClientID,
@@ -260,7 +260,7 @@ type auth0CreateUserResponse struct {
 	Email  string `json:"email"`
 }
 
-func createAuth0User(cfg *config.Config, mgmtToken string, email string, password string) (string, error) {
+func CreateAuth0User(cfg *config.Config, mgmtToken string, email string, password string) (string, error) {
 	payload := map[string]string{
 		"email":      email,
 		"password":   password,

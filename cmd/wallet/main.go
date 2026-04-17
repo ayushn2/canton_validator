@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ayushn2/canton_validator/cantonvalidator"
+	"github.com/ayushn2/canton_validator/service"
 )
 
 func main() {
@@ -22,7 +23,9 @@ func main() {
 	email := "new-test-wallet-6@scopex.money"
 	password := "StrongPassword123!"
 
-	wallet, err := client.CreateWallet(ctx, walletName, email, password)
+	svc := &service.WalletService{CantonGRPCClient: client}
+
+	wallet, err := svc.CreateWallet(ctx, walletName, email, password)
 	if err != nil {
 		log.Fatalf("wallet creation failed: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
 	"github.com/ayushn2/canton_validator/config"
 )
 

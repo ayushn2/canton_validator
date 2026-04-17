@@ -7,6 +7,7 @@ import (
 
 	"github.com/ayushn2/canton_validator/cantonvalidator"
 	"github.com/ayushn2/canton_validator/db"
+	"github.com/ayushn2/canton_validator/service"
 )
 
 const (
@@ -39,9 +40,11 @@ func main() {
 		log.Fatalf("receiver not found in wallet store: %v", err)
 	}
 
+	svc := &service.TransferService{CantonGRPCClient: client}
+
 	fmt.Printf("Transferring %s CC from '%s' to '%s'...\n", amount, sender.Name, receiver.Name)
 
-	if err := client.Transfer(ctx, sender.Email, sender.Password, receiver.PartyID, amount); err != nil {
+	if err := svc.Transfer(ctx, sender.Email, sender.Password, receiver.PartyID, amount); err != nil {
 		log.Fatalf("transfer failed: %v", err)
 	}
 
