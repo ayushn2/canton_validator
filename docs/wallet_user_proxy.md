@@ -434,6 +434,118 @@ CREATED AppRewardCoupon at offset NNNNN
 
 ---
 
+## Step 9: Verify AppRewardCoupon Payload (Confirm Reward Amount)
+
+Check the actual CC amount you earned from the marker:
+
+```bash
+TOKEN=$(python3 get-token.py administrator)
+
+curl -s "http://localhost:7575/v2/updates" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filter": {
+      "filtersByParty": {
+        "YOUR_PARTY_ID": {
+          "cumulative": [{"identifierFilter": {"WildcardFilter": {"value": {}}}}]
+        }
+      }
+    },
+    "beginExclusive": "MARKER_OFFSET_MINUS_1",
+    "endInclusive": "MARKER_OFFSET_PLUS_1"
+  }' | python3 -c "
+import sys, json
+for item in json.loads(sys.stdin.read()):
+    txn = item.get('update',{}).get('Transaction',{}).get('value',{})
+    if not isinstance(txn, dict): continue
+    for e in txn.get('events',[]):
+        ce = e.get('CreatedEvent',{})
+        if ce and isinstance(ce, dict):
+            tid = ce.get('templateId','').split(':')[-1]
+            if 'AppRewardCoupon' in tid:
+                arg = ce.get('createArgument',{})
+                print(f'AppRewardCoupon:')
+                print(f'  featured:    {arg.get(\"featured\")}')
+                print(f'  amount:      {arg.get(\"amount\")} CC')
+                print(f'  round:       {arg.get(\"round\",{}).get(\"number\")}')
+                print(f'  provider:    {arg.get(\"provider\",\"\")[:40]}...')
+                print(f'  beneficiary: {arg.get(\"beneficiary\",\"\")[:40]}...')
+"
+```
+
+Expected output:
+
+```bash
+AppRewardCoupon:
+  featured:    True
+  amount:      6.4624531472 CC
+  round:       40504
+  provider:    your-validator::1220...
+  beneficiary: your-validator::1220...
+```
+
+The `featured: True` confirms this is a Featured App reward (not an unfeatured/capped reward). The `amount` is the CC you earned from that single transfer.
+
+---
+
+## Step 10: Verify Coupon Was Minted Into CC
+
+The AppRewardCoupon should be consumed (archived) in the next round when your validator auto-mints it. Check a few offsets after the coupon was created:
+
+```bash
+TOKEN=$(python3 get-token.py administrator)
+
+curl -s "http://localhost:7575/v2/updates" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filter": {
+      "filtersByParty": {
+        "YOUR_PARTY_ID": {
+          "cumulative": [{"identifierFilter": {"WildcardFilter": {"value": {}}}}]
+        }
+      }
+    },
+    "beginExclusive": "COUPON_OFFSET",
+    "endInclusive": "COUPON_OFFSET_PLUS_5"
+  }' | python3 -c "
+import sys, json
+raw = sys.stdin.read()
+try:
+    data = json.loads(raw)
+    if isinstance(data, list):
+        for item in data:
+            txn = item.get('update',{}).get('Transaction',{}).get('value',{})
+            if not isinstance(txn, dict): continue
+            offset = txn.get('offset','?')
+            for e in txn.get('events',[]):
+                for key in ['CreatedEvent','ArchivedEvent']:
+                    ev = e.get(key,{})
+                    if ev and isinstance(ev, dict):
+                        tid = ev.get('templateId','').split(':')[-1]
+                        action = 'CREATED' if key == 'CreatedEvent' else 'ARCHIVED'
+                        print(f'{action} {tid} @ {offset}')
+    else:
+        print(f'Error: {raw[:300]}')
+except Exception as ex:
+    print(f'Parse error: {ex}')
+    print(raw[:300])
+"
+```
+
+Expected output:
+
+```bash
+ARCHIVED Amulet @ NNNNN
+ARCHIVED Amulet @ NNNNN
+CREATED Amulet @ NNNNN
+```
+
+This shows the coupon was consumed and a new Amulet (CC UTXO) was created with the reward amount merged into your balance. The reward CC is now in your wallet — it doesn't appear as a separate "App Reward" line in the wallet UI, it's merged into your total CC balance.
+
+---
+
 ## Utility Commands
 
 ### Check CC Balance
